@@ -3,201 +3,172 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Engineering Economy Solver - UET Taxila</title>
+    <title>Engineering Economy Solver - UET Taxila Edition</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
-<body class="bg-slate-50">
+<body class="bg-slate-50 text-slate-900">
     <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // --- Icon Wrapper ---
+        // --- Icon Component ---
         const Icon = ({ name, className }) => {
-            useEffect(() => {
-                if (window.lucide) window.lucide.createIcons();
-            }, [name]);
+            useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name]);
             return <i data-lucide={name} className={className}></i>;
         };
 
-        // --- Shared Components ---
-        function InputField({ label, value, onChange }) {
+        // --- Helper Components ---
+        const Input = ({ label, value, onChange }) => (
+            <div className="flex flex-col">
+                <label className="text-[10px] font-bold text-slate-500 uppercase mb-1">{label}</label>
+                <input type="number" className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" 
+                       value={value} onChange={onChange} placeholder="0.00" />
+            </div>
+        );
+
+        const ResultBox = ({ label, val, color }) => {
+            const themes = {
+                blue: "bg-blue-50 border-blue-100 text-blue-700",
+                emerald: "bg-emerald-50 border-emerald-100 text-emerald-700",
+                amber: "bg-amber-50 border-amber-100 text-amber-700",
+                rose: "bg-rose-50 border-rose-100 text-rose-700"
+            };
             return (
-                <div className="flex flex-col">
-                    <label className="text-xs font-bold text-slate-500 mb-1 uppercase">{label}</label>
-                    <input type="number" className="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
-                           value={value} onChange={onChange} placeholder="0.00" />
+                <div className={`p-4 border rounded-xl ${themes[color]}`}>
+                    <p className="text-[10px] font-bold uppercase opacity-70">{label}</p>
+                    <p className="text-xl font-bold">${Math.abs(val).toLocaleString(undefined, {minimumFractionDigits: 2})} {val < 0 ? '(Cost)' : '(Net)'}</p>
                 </div>
             );
-        }
+        };
 
-        function CashFlowDiagram({ flows, n }) {
-            const width = 800, height = 200, padding = 60, baseY = 100;
-            if (!flows || flows.length === 0) return <div className="h-20 flex items-center justify-center text-slate-300">Add data to see diagram</div>;
+        // --- Diagram Component ---
+        const CashFlowDiagram = ({ flows, n }) => {
+            const width = 800, height = 220, padding = 60, baseY = 110;
+            if (!flows || flows.length === 0) return <div className="h-32 flex items-center justify-center text-slate-300 italic text-sm">Add flows to generate diagram...</div>;
+            
             const maxVal = Math.max(...flows.map(f => Math.abs(f.val))) || 1;
             const getX = (t) => padding + (t / n) * (width - padding * 2);
 
             return (
-                <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto">
+                <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto drop-shadow-sm">
                     <line x1={padding} y1={baseY} x2={width-padding} y2={baseY} stroke="#cbd5e1" strokeWidth="2" />
                     {flows.map((f, i) => {
                         const x = getX(f.t);
-                        const h = (Math.abs(f.val) / maxVal) * 70 + 5;
-                        const color = f.isU ? '#ec4899' : (f.val >= 0 ? '#10b981' : '#ef4444');
+                        const h = (Math.abs(f.val) / maxVal) * 80 + 5;
+                        const color = f.isU ? '#f43f5e' : (f.val >= 0 ? '#10b981' : '#ef4444');
                         return (
                             <g key={i}>
                                 <line x1={x} y1={baseY} x2={x} y2={f.val >= 0 ? baseY-h : baseY+h} stroke={color} strokeWidth="3" strokeDasharray={f.isU ? "4 2" : "0"} />
-                                <text x={x} y={f.val >= 0 ? baseY-h-10 : baseY+h+20} textAnchor="middle" fontSize="12" fill={color} fontWeight="bold">{Math.abs(f.val).toFixed(0)}</text>
+                                <text x={x} y={f.val >= 0 ? baseY-h-10 : baseY+h+20} textAnchor="middle" fontSize="11" fill={color} fontWeight="bold">{Math.abs(f.val).toFixed(0)}</text>
                                 <text x={x} y={baseY+40} textAnchor="middle" fontSize="10" fill="#94a3b8">{f.t}</text>
                                 <circle cx={x} cy={baseY} r="3" fill="#cbd5e1" />
                             </g>
-                        )
+                        );
                     })}
                 </svg>
             );
-        }
+        };
 
-        // --- App Modules ---
-        function SinglePayment() {
-            const [mode, setMode] = useState('findF');
-            const [inputs, setInputs] = useState({ p: '', f: '', i: '', n: '' });
-            const i = parseFloat(inputs.i)/100, n = parseFloat(inputs.n), p = parseFloat(inputs.p), f = parseFloat(inputs.f);
-            let res = null;
-            if (!isNaN(i) && !isNaN(n)) {
-                if (mode === 'findF' && !isNaN(p)) {
-                    const v = p * Math.pow(1+i, n);
-                    res = { val: v, form: 'F=P(1+i)ⁿ', flows: [{t:0, val:p}, {t:n, val:v, isU:true}], n };
-                } else if (mode === 'findP' && !isNaN(f)) {
-                    const v = f / Math.pow(1+i, n);
-                    res = { val: v, form: 'P=F/(1+i)ⁿ', flows: [{t:0, val:v, isU:true}, {t:n, val:f}], n };
-                }
-            }
-            return (
-                <div className="space-y-6">
-                    <div className="flex gap-2 p-1 bg-slate-100 rounded-lg w-fit">
-                        <button onClick={()=>setMode('findF')} className={`px-4 py-1 rounded ${mode==='findF'?'bg-white shadow text-blue-600':'text-slate-500'}`}>Find F</button>
-                        <button onClick={()=>setMode('findP')} className={`px-4 py-1 rounded ${mode==='findP'?'bg-white shadow text-blue-600':'text-slate-500'}`}>Find P</button>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <InputField label={mode==='findF'?'Present P':'Future F'} value={mode==='findF'?inputs.p:inputs.f} onChange={e=>setInputs({...inputs, [mode==='findF'?'p':'f']:e.target.value})} />
-                        <InputField label="Rate i%" value={inputs.i} onChange={e=>setInputs({...inputs, i:e.target.value})} />
-                        <InputField label="Periods n" value={inputs.n} onChange={e=>setInputs({...inputs, n:e.target.value})} />
-                    </div>
-                    {res && <div className="p-6 bg-emerald-50 border border-emerald-100 rounded-2xl">
-                        <p className="text-sm text-emerald-600">Calculated: {res.form}</p>
-                        <p className="text-4xl font-bold">${res.val.toLocaleString()}</p>
-                        <div className="mt-4 bg-white p-4 rounded-xl border"><CashFlowDiagram flows={res.flows} n={res.n} /></div>
-                    </div>}
-                </div>
-            );
-        }
-
-        function UniformSeries() {
-            const [mode, setMode] = useState('P/A');
-            const [inputs, setInputs] = useState({ a: '', p: '', f: '', i: '', n: '' });
-            const i = parseFloat(inputs.i)/100, n = parseInt(inputs.n), a = parseFloat(inputs.a);
-            let res = null;
-            if (i > 0 && n > 0 && !isNaN(a)) {
-                if (mode === 'P/A') {
-                    const v = a * (Math.pow(1+i, n)-1) / (i * Math.pow(1+i, n));
-                    let fls = [{t:0, val:v, isU:true}];
-                    for(let t=1; t<=n; t++) fls.push({t, val:a});
-                    res = { val: v, form: 'P=A(P/A, i, n)', flows: fls, n };
-                } else if (mode === 'F/A') {
-                    const v = a * (Math.pow(1+i, n)-1) / i;
-                    let fls = [];
-                    for(let t=1; t<=n; t++) fls.push({t, val:a});
-                    fls.push({t:n, val:v, isU:true});
-                    res = { val: v, form: 'F=A(F/A, i, n)', flows: fls, n };
-                }
-            }
-            return (
-                <div className="space-y-6">
-                    <select className="p-2 border rounded-lg bg-white" onChange={e=>setMode(e.target.value)}>
-                        <option value="P/A">Find P given A</option>
-                        <option value="F/A">Find F given A</option>
-                    </select>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <InputField label="Annuity A" value={inputs.a} onChange={e=>setInputs({...inputs, a:e.target.value})} />
-                        <InputField label="Rate i%" value={inputs.i} onChange={e=>setInputs({...inputs, i:e.target.value})} />
-                        <InputField label="Periods n" value={inputs.n} onChange={e=>setInputs({...inputs, n:e.target.value})} />
-                    </div>
-                    {res && <div className="p-6 bg-blue-50 border border-blue-100 rounded-2xl">
-                        <p className="text-4xl font-bold">${res.val.toLocaleString()}</p>
-                        <div className="mt-4 bg-white p-4 rounded-xl border"><CashFlowDiagram flows={res.flows} n={res.n} /></div>
-                    </div>}
-                </div>
-            );
-        }
-
+        // --- Module: Custom Builder ---
         function CustomBuilder() {
             const [i, setI] = useState('10');
             const [n, setN] = useState('10');
             const [flows, setFlows] = useState([]);
-            const [amt, setAmt] = useState('');
-            const [t, setT] = useState('0');
+            const [entry, setEntry] = useState({ type: 'single', amt: '', tS: '0', tE: '1', g: '0' });
 
-            const add = () => { if(amt) { setFlows([...flows, { t: parseInt(t), val: parseFloat(amt) }]); setAmt(''); } };
-            
+            const addFlow = () => {
+                if(!entry.amt) return;
+                const amt = parseFloat(entry.amt), tS = parseInt(entry.tS), tE = parseInt(entry.tE), g = parseFloat(entry.g);
+                let newEntries = [];
+
+                if (entry.type === 'single') newEntries.push({ t: tS, val: amt });
+                else if (entry.type === 'uniform') {
+                    for (let k = tS; k <= tE; k++) newEntries.push({ t: k, val: amt });
+                } else if (entry.type === 'gradient') {
+                    for (let k = tS; k <= tE; k++) newEntries.push({ t: k, val: amt + (k - tS) * g });
+                }
+                setFlows([...flows, ...newEntries]);
+                setEntry({ ...entry, amt: '' });
+            };
+
             const rate = parseFloat(i)/100, periods = parseInt(n);
-            let npv = 0;
-            flows.forEach(f => npv += f.val / Math.pow(1 + rate, f.t));
+            let p = 0;
+            flows.forEach(f => { if(f.t <= periods) p += f.val / Math.pow(1 + rate, f.t); });
+            
+            const f = p * Math.pow(1 + rate, periods);
+            const a = rate === 0 ? p / periods : p * (rate * Math.pow(1 + rate, periods)) / (Math.pow(1 + rate, periods) - 1);
 
             return (
                 <div className="space-y-6">
-                    <div className="grid grid-cols-2 gap-4">
-                        <InputField label="Interest Rate %" value={i} onChange={e=>setI(e.target.value)} />
-                        <InputField label="Total Periods n" value={n} onChange={e=>setN(e.target.value)} />
+                    <div className="grid grid-cols-2 gap-4 bg-white p-4 rounded-xl border">
+                        <Input label="Global Rate i (%)" value={i} onChange={e=>setI(e.target.value)} />
+                        <Input label="Project Life n" value={n} onChange={e=>setN(e.target.value)} />
                     </div>
-                    <div className="flex gap-2 items-end p-4 bg-slate-100 rounded-xl">
-                        <InputField label="Amount $" value={amt} onChange={e=>setAmt(e.target.value)} />
-                        <InputField label="Time t" value={t} onChange={e=>setT(e.target.value)} />
-                        <button onClick={add} className="bg-blue-600 text-white px-6 py-2 rounded-lg">Add</button>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="p-4 bg-emerald-50 rounded-xl border">
-                            <p className="text-xs font-bold text-emerald-600 uppercase">Net Present Value (P)</p>
-                            <p className="text-3xl font-bold">${npv.toLocaleString()}</p>
+
+                    <div className="bg-slate-100 p-5 rounded-2xl border-2 border-dashed border-slate-200 space-y-4">
+                        <div className="flex gap-4">
+                            {['single', 'uniform', 'gradient'].map(type => (
+                                <button key={type} onClick={()=>setEntry({...entry, type})} 
+                                        className={`text-xs font-bold px-3 py-1 rounded-full transition ${entry.type === type ? 'bg-blue-600 text-white':'bg-white text-slate-500'}`}>
+                                    {type.toUpperCase()}
+                                </button>
+                            ))}
                         </div>
-                        <div className="p-4 bg-indigo-50 rounded-xl border">
-                            <p className="text-xs font-bold text-indigo-600 uppercase">Future Value (F)</p>
-                            <p className="text-3xl font-bold">${(npv * Math.pow(1+rate, periods)).toLocaleString()}</p>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <Input label="Amount $" value={entry.amt} onChange={e=>setEntry({...entry, amt:e.target.value})} />
+                            <Input label="Start t" value={entry.tS} onChange={e=>setEntry({...entry, tS:e.target.value})} />
+                            {entry.type !== 'single' && <Input label="End t" value={entry.tE} onChange={e=>setEntry({...entry, tE:e.target.value})} />}
+                            {entry.type === 'gradient' && <Input label="Gradient G" value={entry.g} onChange={e=>setEntry({...entry, g:e.target.value})} />}
                         </div>
+                        <button onClick={addFlow} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg flex items-center justify-center gap-2">
+                            <Icon name="plus-circle" className="w-4 h-4"/> Add Series
+                        </button>
                     </div>
-                    <div className="p-4 border rounded-xl bg-white"><CashFlowDiagram flows={flows} n={periods} /></div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <ResultBox label="Present Worth (P)" val={p} color="emerald" />
+                        <ResultBox label="Future Worth (F)" val={f} color="blue" />
+                        <ResultBox label="Annual Worth (A)" val={a} color="rose" />
+                    </div>
+
+                    <div className="bg-white p-6 rounded-2xl border shadow-sm">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-sm font-bold text-slate-700 uppercase tracking-widest">Net Cash Flow Diagram</h3>
+                            <button onClick={()=>setFlows([])} className="text-[10px] text-red-500 font-bold hover:underline">CLEAR ALL</button>
+                        </div>
+                        <CashFlowDiagram flows={flows} n={periods} />
+                    </div>
                 </div>
             );
         }
 
-        // --- Main App Shell ---
+        // --- App Shell ---
         function App() {
-            const [tab, setTab] = useState('custom');
             return (
-                <div className="min-h-screen bg-slate-50 p-4 md:p-8">
-                    <div className="max-w-4xl mx-auto space-y-6">
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center">
+                <div className="min-h-screen p-4 md:p-10">
+                    <div className="max-w-4xl mx-auto space-y-8">
+                        <header className="flex justify-between items-center bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
                             <div>
-                                <h1 className="text-2xl font-bold text-slate-800">Engineering Economy Solver</h1>
-                                <p className="text-slate-500 text-sm">Full Solver for UET Taxila Students</p>
+                                <h1 className="text-3xl font-black text-slate-800 tracking-tight">EcoSolve <span className="text-blue-600">Pro</span></h1>
+                                <p className="text-slate-400 text-xs font-bold uppercase tracking-tighter">UET Taxila Engineering Economy Toolkit</p>
                             </div>
-                            <Icon name="calculator" className="w-8 h-8 text-blue-600" />
-                        </div>
-                        <div className="flex gap-2 flex-wrap">
-                            {['single', 'uniform', 'custom'].map(t => (
-                                <button key={t} onClick={()=>setTab(t)} className={`px-4 py-2 rounded-lg font-medium transition ${tab===t?'bg-blue-600 text-white':'bg-white text-slate-500 border'}`}>
-                                    {t.toUpperCase()}
-                                </button>
-                            ))}
-                        </div>
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border">
-                            {tab === 'single' && <SinglePayment />}
-                            {tab === 'uniform' && <UniformSeries />}
-                            {tab === 'custom' && <CustomBuilder />}
-                        </div>
+                            <div className="p-4 bg-blue-600 text-white rounded-2xl rotate-3 shadow-lg shadow-blue-200">
+                                <Icon name="trending-up" className="w-8 h-8" />
+                            </div>
+                        </header>
+                        
+                        <main className="bg-white p-8 rounded-[2rem] shadow-xl shadow-slate-200/50 border border-slate-100">
+                            <CustomBuilder />
+                        </main>
+                        
+                        <footer className="text-center text-slate-400 text-[10px] font-bold uppercase tracking-widest">
+                            Built for Mechanical Engineering Semester 5 • 2026
+                        </footer>
                     </div>
                 </div>
             );
