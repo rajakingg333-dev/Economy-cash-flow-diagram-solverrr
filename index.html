@@ -100,17 +100,20 @@
             );
         };
 
-        const CashFlowDiagram = ({ flows, n }) => {
+        const CashFlowDiagram = ({ flows, startYear, endYear }) => {
             const width = 800, height = 220, padding = 60, baseY = 110;
+            const span = Math.max(endYear - startYear, 1);
+            
             if (!flows || flows.length === 0) return <div className="h-32 flex items-center justify-center text-slate-300 italic text-sm">Add flows to generate diagram...</div>;
             
             const maxVal = Math.max(...flows.map(f => Math.abs(f.val))) || 1;
-            const getX = (t) => padding + (t / Math.max(n, 1)) * (width - padding * 2);
+            const getX = (t) => padding + ((t - startYear) / span) * (width - padding * 2);
 
             return (
                 <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto drop-shadow-sm">
                     <line x1={padding} y1={baseY} x2={width-padding} y2={baseY} stroke="#cbd5e1" strokeWidth="2" />
                     {flows.map((f, i) => {
+                        if (f.t < startYear || f.t > endYear) return null;
                         const x = getX(f.t);
                         const h = (Math.abs(f.val) / maxVal) * 80 + 5;
                         const color = f.val >= 0 ? '#10b981' : '#ef4444';
@@ -118,7 +121,7 @@
                             <g key={i}>
                                 <line x1={x} y1={baseY} x2={x} y2={f.val >= 0 ? baseY-h : baseY+h} stroke={color} strokeWidth="3" />
                                 <text x={x} y={f.val >= 0 ? baseY-h-10 : baseY+h+20} textAnchor="middle" fontSize="11" fill={color} fontWeight="bold">{Math.abs(f.val).toFixed(0)}</text>
-                                <text x={x} y={baseY+40} textAnchor="middle" fontSize="10" fill="#94a3b8">{f.t}</text>
+                                <text x={x} y={baseY+40} textAnchor="middle" fontSize="10" fill="#94a3b8">Yr {f.t}</text>
                                 <circle cx={x} cy={baseY} r="3" fill="#cbd5e1" />
                             </g>
                         );
@@ -132,9 +135,9 @@
             const [calcMode, setCalcMode] = useState('eff'); 
             const [nominalRate, setNominalRate] = useState('10');
             const [effectiveRate, setEffectiveRate] = useState('');
+            const [basePeriod, setBasePeriod] = useState('1'); // 1 = per Year, 12 = per Month, 52 = per Week
             const [m, setM] = useState('12'); 
 
-            // Added dynamic options for monthly, weekly, daily, etc.
             const compPeriods = [
                 { label: 'Annually (m=1)', value: '1' },
                 { label: 'Semiannually (m=2)', value: '2' },
@@ -148,8 +151,9 @@
             let calculatedEffective = null;
             let calculatedNominal = null;
 
+            // Normalize values based on dynamic base periods (Yearly/Monthly/Weekly)
             if (calcMode === 'eff') {
-                const r = (parseFloat(nominalRate) || 0) / 100;
+                const r = ((parseFloat(nominalRate) || 0) / 100) / parseFloat(basePeriod);
                 if (m === 'inf') {
                     calculatedEffective = (Math.exp(r) - 1) * 100;
                 } else {
@@ -160,10 +164,10 @@
                 const ia = (parseFloat(effectiveRate) || 0) / 100;
                 if (ia >= -1) {
                     if (m === 'inf') {
-                        calculatedNominal = Math.log(ia + 1) * 100;
+                        calculatedNominal = Math.log(ia + 1) * 100 * parseFloat(basePeriod);
                     } else {
                         const mVal = parseInt(m) || 1;
-                        calculatedNominal = mVal * (Math.pow(ia + 1, 1 / mVal) - 1) * 100;
+                        calculatedNominal = mVal * (Math.pow(ia + 1, 1 / mVal) - 1) * 100 * parseFloat(basePeriod);
                     }
                 }
             }
@@ -178,18 +182,29 @@
                             Nominal vs. Effective Interest Rates
                         </h2>
                         <p className="text-xs text-slate-500 mt-1">
-                            <strong>Nominal Rate (r):</strong> Stated yearly rate. <br/>
-                            <strong>Effective Rate (i<sub>eff</sub>):</strong> Actual interest earned/paid over a year after factoring compounding intervals ($m$).
+                            <strong>Nominal Rate (r):</strong> Stated base rate. <br/>
+                            <strong>Effective Rate (i<sub>eff</sub>):</strong> Actual interest calculated over the selected compounding interval setup.
                         </p>
                     </div>
 
-                    <div className="flex gap-2 p-1 bg-slate-100 rounded-lg w-fit text-xs font-bold">
-                        <button onClick={() => setCalcMode('eff')} className={`px-3 py-1.5 rounded-md transition ${calcMode === 'eff' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>
-                            Find Effective Rate
-                        </button>
-                        <button onClick={() => setCalcMode('nom')} className={`px-3 py-1.5 rounded-md transition ${calcMode === 'nom' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>
-                            Find Nominal Rate
-                        </button>
+                    <div className="flex flex-wrap gap-3 items-center justify-between">
+                        <div className="flex gap-2 p-1 bg-slate-100 rounded-lg w-fit text-xs font-bold">
+                            <button onClick={() => setCalcMode('eff')} className={`px-3 py-1.5 rounded-md transition ${calcMode === 'eff' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>
+                                Find Effective Rate
+                            </button>
+                            <button onClick={() => setCalcMode('nom')} className={`px-3 py-1.5 rounded-md transition ${calcMode === 'nom' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>
+                                Find Nominal Rate
+                            </button>
+                        </div>
+
+                        <div className="flex items-center gap-2 text-xs">
+                            <span className="font-bold text-slate-500 uppercase text-[10px]">Rate Stated Per:</span>
+                            <select value={basePeriod} onChange={(e) => setBasePeriod(e.target.value)} className="px-2 py-1 border rounded bg-white font-medium text-slate-700">
+                                <option value="1">Year</option>
+                                <option value="12">Month</option>
+                                <option value="52">Week</option>
+                            </select>
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
@@ -229,9 +244,10 @@
 
         function CustomBuilder() {
             const [i, setI] = useState('10');
-            const [n, setN] = useState('10');
+            const [startYear, setStartYear] = useState('2026');
+            const [endYear, setEndYear] = useState('2036');
             const [flows, setFlows] = useState([]);
-            const [entry, setEntry] = useState({ type: 'single', amt: '', tS: '0', tE: '1', g: '0' });
+            const [entry, setEntry] = useState({ type: 'single', amt: '', tS: '2026', tE: '2036', g: '0' });
 
             const addFlow = () => {
                 if(!entry.amt || isNaN(entry.amt)) return;
@@ -256,24 +272,36 @@
             };
 
             const rate = (parseFloat(i) || 0) / 100;
-            const periods = parseInt(n) || 0;
+            const sYr = parseInt(startYear) || 0;
+            const eYr = parseInt(endYear) || 0;
+            const periods = Math.max(eYr - sYr, 0);
             
             let p = 0;
-            flows.forEach(f => { if(f.t <= periods) p += f.val / Math.pow(1 + rate, f.t); });
+            flows.forEach(f => { 
+                if(f.t >= sYr && f.t <= eYr) {
+                    const relativeTime = f.t - sYr;
+                    p += f.val / Math.pow(1 + rate, relativeTime); 
+                }
+            });
             
             const f = p * Math.pow(1 + rate, periods);
             const a = rate === 0 ? p / (periods || 1) : p * (rate * Math.pow(1 + rate, periods)) / (Math.pow(1 + rate, periods) - 1);
-            const irrValue = calculateIRR(flows);
+            
+            // Adjust loop for IRR mapping relative to baseline year
+            const irrValue = calculateIRR(flows.map(fl => ({ t: fl.t - sYr, val: fl.val })));
 
             return (
                 <div className="space-y-6">
                     <InterestRateConverter onApplyRate={(rate) => setI(rate)} />
 
-                    <div className="grid grid-cols-2 gap-4 bg-white p-4 rounded-xl border shadow-sm">
+                    {/* Timeline Controls */}
+                    <div className="grid grid-cols-3 gap-4 bg-white p-4 rounded-xl border shadow-sm">
                         <Input label="Global Analysis Rate i (%)" value={i} onChange={e=>setI(e.target.value)} />
-                        <Input label="Project Life n" value={n} onChange={e=>setN(e.target.value)} />
+                        <Input label="Start Analysis Year" value={startYear} onChange={e=>setStartYear(e.target.value)} />
+                        <Input label="End Analysis Year" value={endYear} onChange={e=>setEndYear(e.target.value)} />
                     </div>
 
+                    {/* Cash Flow Input Builder */}
                     <div className="bg-slate-100 p-5 rounded-2xl border-2 border-dashed border-slate-200 space-y-4">
                         <div className="flex gap-4">
                             {['single', 'uniform', 'gradient'].map(type => (
@@ -285,8 +313,8 @@
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                             <Input label="Amount $" value={entry.amt} onChange={e=>setEntry({...entry, amt:e.target.value})} />
-                            <Input label="Start t" value={entry.tS} onChange={e=>setEntry({...entry, tS:e.target.value})} />
-                            {entry.type !== 'single' && <Input label="End t" value={entry.tE} onChange={e=>setEntry({...entry, tE:e.target.value})} />}
+                            <Input label="Start Year (t)" value={entry.tS} onChange={e=>setEntry({...entry, tS:e.target.value})} />
+                            {entry.type !== 'single' && <Input label="End Year (t)" value={entry.tE} onChange={e=>setEntry({...entry, tE:e.target.value})} />}
                             {entry.type === 'gradient' && <Input label="Gradient G" value={entry.g} onChange={e=>setEntry({...entry, g:e.target.value})} />}
                         </div>
                         <button onClick={addFlow} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg flex items-center justify-center gap-2">
@@ -294,19 +322,21 @@
                         </button>
                     </div>
 
+                    {/* Financial Metric Output Cards */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <ResultBox label="Present Worth (P)" val={p} color="emerald" />
+                        <ResultBox label={`Present Worth P (${sYr})`} val={p} color="emerald" />
                         <ResultBox label="Annual Worth (A)" val={a} color="rose" />
-                        <ResultBox label="Future Worth (F)" val={f} color="blue" />
+                        <ResultBox label={`Future Worth F (${eYr})`} val={f} color="blue" />
                         <ResultBox label="Internal Rate (IRR)" val={irrValue} color="indigo" isPercent={true} />
                     </div>
 
+                    {/* Cash Flow Graph Visualization */}
                     <div className="bg-white p-6 rounded-2xl border shadow-sm">
                         <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-sm font-bold text-slate-700 uppercase tracking-widest">Net Cash Flow Diagram</h3>
+                            <h3 className="text-sm font-bold text-slate-700 uppercase tracking-widest">Net Cash Flow Diagram ({sYr} - {eYr})</h3>
                             <button onClick={()=>setFlows([])} className="text-[10px] text-red-500 font-bold hover:underline">CLEAR ALL</button>
                         </div>
-                        <CashFlowDiagram flows={flows} n={periods} />
+                        <CashFlowDiagram flows={flows} startYear={sYr} endYear={eYr} />
                     </div>
                 </div>
             );
