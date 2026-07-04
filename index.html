@@ -127,20 +127,22 @@
             );
         };
 
-        // --- New Component: Interest Rate Concept & Converter ---
+        // --- Interest Rate Converter Section ---
         const InterestRateConverter = ({ onApplyRate }) => {
-            const [calcMode, setCalcMode] = useState('eff'); // 'eff' = find effective, 'nom' = find nominal
+            const [calcMode, setCalcMode] = useState('eff'); 
             const [nominalRate, setNominalRate] = useState('10');
             const [effectiveRate, setEffectiveRate] = useState('');
-            const [m, setM] = useState('12'); // compounding periods per year
+            const [m, setM] = useState('12'); 
 
+            // Added dynamic options for monthly, weekly, daily, etc.
             const compPeriods = [
                 { label: 'Annually (m=1)', value: '1' },
                 { label: 'Semiannually (m=2)', value: '2' },
                 { label: 'Quarterly (m=4)', value: '4' },
                 { label: 'Monthly (m=12)', value: '12' },
+                { label: 'Weekly (m=52)', value: '52' },
                 { label: 'Daily (m=365)', value: '365' },
-                { label: 'Continuous', value: 'inf' }
+                { label: 'Continuously (m=∞)', value: 'inf' }
             ];
 
             let calculatedEffective = null;
@@ -176,8 +178,8 @@
                             Nominal vs. Effective Interest Rates
                         </h2>
                         <p className="text-xs text-slate-500 mt-1">
-                            <strong>Nominal Rate (r):</strong> The stated annual rate ignoring compounding effects. <br/>
-                            <strong>Effective Rate (i<sub>eff</sub>):</strong> The actual annual interest earned/paid factoring in compounding frequencies per year (m).
+                            <strong>Nominal Rate (r):</strong> Stated yearly rate. <br/>
+                            <strong>Effective Rate (i<sub>eff</sub>):</strong> Actual interest earned/paid over a year after factoring compounding intervals ($m$).
                         </p>
                     </div>
 
@@ -198,7 +200,7 @@
                         )}
 
                         <div className="flex flex-col w-full">
-                            <label className="text-[10px] font-bold text-slate-500 uppercase mb-1">Compounding Frequency (m)</label>
+                            <label className="text-[10px] font-bold text-slate-500 uppercase mb-1">Compounding Period</label>
                             <select value={m} onChange={(e) => setM(e.target.value)} className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white h-[38px]">
                                 {compPeriods.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                             </select>
@@ -265,16 +267,13 @@
 
             return (
                 <div className="space-y-6">
-                    {/* Interest Rate Concept and Conversion Segment */}
                     <InterestRateConverter onApplyRate={(rate) => setI(rate)} />
 
-                    {/* Main Cash Flow Variables Input */}
                     <div className="grid grid-cols-2 gap-4 bg-white p-4 rounded-xl border shadow-sm">
                         <Input label="Global Analysis Rate i (%)" value={i} onChange={e=>setI(e.target.value)} />
-                        <Input label="Project Life n (Years/Periods)" value={n} onChange={e=>setN(e.target.value)} />
+                        <Input label="Project Life n" value={n} onChange={e=>setN(e.target.value)} />
                     </div>
 
-                    {/* Cash Flow Input Builder */}
                     <div className="bg-slate-100 p-5 rounded-2xl border-2 border-dashed border-slate-200 space-y-4">
                         <div className="flex gap-4">
                             {['single', 'uniform', 'gradient'].map(type => (
@@ -295,7 +294,6 @@
                         </button>
                     </div>
 
-                    {/* Financial Metric Output Cards */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <ResultBox label="Present Worth (P)" val={p} color="emerald" />
                         <ResultBox label="Annual Worth (A)" val={a} color="rose" />
@@ -303,7 +301,6 @@
                         <ResultBox label="Internal Rate (IRR)" val={irrValue} color="indigo" isPercent={true} />
                     </div>
 
-                    {/* Scannable Cash Flow Graph Visualization */}
                     <div className="bg-white p-6 rounded-2xl border shadow-sm">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-sm font-bold text-slate-700 uppercase tracking-widest">Net Cash Flow Diagram</h3>
